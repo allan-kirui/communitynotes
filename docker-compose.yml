@@ -1,0 +1,70 @@
+# Community Notes API Service - Docker Compose
+# For local development and testing
+
+version: '3.8'
+
+services:
+  community-notes-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: community-notes-api
+    ports:
+      - "8001:8001"
+    environment:
+      - CN_DATABASE_URL=sqlite:///./data/community_notes.db
+      - CN_DEBUG=true
+      - CN_LOG_LEVEL=DEBUG
+      - CN_SCORING_INTERVAL_MINUTES=15
+      - CN_MIN_RATINGS_FOR_STATUS=5
+      - CN_HELPFUL_INTERCEPT_THRESHOLD=0.40
+      - CN_NOT_HELPFUL_INTERCEPT_THRESHOLD=-0.05
+      - CN_ALLOWED_ORIGINS=http://localhost:8000,http://localhost:3000
+    volumes:
+      # Mount data directory for persistence
+      - cn_data:/app/data
+      # Mount code for hot reload in development
+      - ./api:/app/api:ro
+      - ./scoring:/app/scoring:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - accountability-network
+
+  # Optional: PostgreSQL for production-like setup
+  cn-postgres:
+    image: postgres:15-alpine
+    container_name: cn-postgres
+    profiles:
+      - postgres  # Only start with: docker-compose --profile postgres up
+    environment:
+      POSTGRES_DB: community_notes
+      POSTGRES_USER: cn_user
+      POSTGRES_PASSWORD: cn_password
+    ports:
+      - "5434:5432"
+    volumes:
+      - cn_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cn_user -d community_notes"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - accountability-network
+
+volumes:
+  cn_data:
+    name: community_notes_data
+  cn_postgres_data:
+    name: community_notes_postgres_data
+
+networks:
+  accountability-network:
+    name: accountability-network
+    external: true
